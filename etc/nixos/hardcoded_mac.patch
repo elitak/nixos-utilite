@@ -1,0 +1,12 @@
+--- a/drivers/net/ethernet/intel/igb/igb_main.c	2016-09-29 21:39:40.357413896 -0700
++++ b/drivers/net/ethernet/intel/igb/igb_main.c	2016-09-29 21:40:18.591036184 -0700
+@@ -2446,7 +2446,8 @@
+ 	if (hw->mac.ops.read_mac_addr(hw))
+ 		dev_err(&pdev->dev, "NVM Read Error\n");
+ 
+-	memcpy(netdev->dev_addr, hw->mac.addr, netdev->addr_len);
++        u8 hardcoded_addr[6] = { 0x00, 0x01, 0xc0, 0x14, 0xaa, 0x01 };
++	memcpy(netdev->dev_addr, hardcoded_addr, netdev->addr_len);
+ 
+ 	if (!is_valid_ether_addr(netdev->dev_addr)) {
+ 		dev_err(&pdev->dev, "Invalid MAC Address\n");

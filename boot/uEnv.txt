@@ -1,0 +1,53 @@
+### UTILITE
+load=load sata 0:2
+prefix=/boot
+kernel_addr_r=0x10800000
+ramdisk_addr_r=0x12000000
+fdt_addr_r=0x16000000
+system_bootargs=setenv bootargs console=${console} root=/dev/sda2 rootfstype=ext4 rootwait video=mxcfb0:dev=hdmi,1920x1080@60,if=RGB24,bpp=16 consoleblank=0 cm_fx6_v4l dmfc=3 ${mtdparts}
+fdtname=imx6q-cm-fx6
+
+# NB the original uboot on utilite cant use:
+#  'env exists' (updated 2015.07 can)
+#  symlinks (2015.07 can follow at least file links)
+#  uEnv.txt natively (updated 2015.07 has env import)
+#  kernel_addr_r etc. is not compiled into uboot (could be erased? prly not baked in anyway)
+# in newer version (built in nixpkgs my cross branch), currently flashed:
+#  has fdtaddr etc now in defaults.
+#  EBOOT seems to be in there too, try extlinux booting (nope, sysboot cmd not there, must just be cruft)
+#  new ver has "load" and "ls" etc that tries all fses, eliminating the need for diff cmd names
+#  ext4 supported and can read /nix/store paths! can use generations dir without copy now.
+#  i added setexpr into my custom nix build of ubootUtilte (was disabled in uboot defconfig for cmfx6)
+
+# NB /boot/default/kernel uses absolute symlink, so is broken when part is mounted on /boot... great job nixos guys... so use /boot symlink? (nope, only 1 symlink followed -__-) using the ext4 rootfs directly (as intended i guess) works fine
+# TODO mtdparts and kernel module to support it and have backup in nand / ubifs (use nand parts for kernel since ubifs can get unmountable fairly easily)
+# NB sysboot command for extlinux seems infeasible since CONFIG_CMD_PXE is only enableable for certain platforms? ones that have good user interaction probably
+# TODO sort out video + splashimg during boot one of these prly
+#video_dvi=mxcfb0:dev=dvi,1280x800M-32@50,if=RGB32
+#video_hdmi=mxcfb0:dev=hdmi,1920x1080M-32@50,if=RGB32
+#video_v4l=cm_fx6_v4l_msize=128M vmalloc=256M
+#video=mxcfb0:dev=hdmi,1920x1080@60,if=RGB24,bpp=16
+
+### CHIP
+# (addrs are already set in uboot)
+#load=ubifsload
+#system_bootargs=setenv bootargs root=ubi0:rootfs rootfstype=ubifs rw earlyprintk ubi.mtd=4
+#fdtname=sun5i-r8-chip
+#prefix=/boot
+
+bootcmd=run nixos_bootcmd
+
+# SUPER GOTCHA: (symptom: can't ever reliably load fdt, except by appending it) solution: set fdt_high 0xffffffff to disable relocation because uboot is relocating from 0x16000... or whatev i set here to just before 0x10800000 which is apparently inacessible to the kernel!
+# This prevents relocation of fdt that would break the boot on utilite, where 0x10800000 is out of range!
+fdt_high=0xffffffff
+# may need this later if initrd gets relocated wrong
+#initrd_high=0xffffffff
+
+nixos_bootcmd=run nixos_select_profile system_bootargs nixos_bootargs; ${load} ${kernel_addr_r} ${nixos_profile}/kernel; ${load} ${fdt_addr_r} ${prefix}/${fdtname}.dtb; bootm ${kernel_addr_r} - ${fdt_addr_r}
+
+nixos_select_profile=if env exists nixos_generation; then setenv nixos_profile ${prefix}/system-${nixos_generation}; else setenv nixos_profile ${prefix}/default; fi; setenv nixos_fdt ${prefix}/${fdtname}.dtb
+nixos_bootargs=setenv bootargs ${bootargs} systemConfig=${nixos_profile}/system init=${nixos_profile}/init ${nixos_initargs}
+nixos_initargs=loglevel=4
+
+# When unset, we use the default profile.
+#nixos_generation=51
